@@ -5,10 +5,13 @@ Le flux officiel du site (spip.php?page=backend) mélange toutes les rubriques
 et ne contient pas l'image : on part donc du dernier dessin et on remonte la
 chaîne « dessin précédent » pour récupérer titre, date et image de chacun.
 
-Usage : python3 faro_rss.py [-n 30] [-o feed.xml]
+Usage : python3 faro_rss.py [-n 30] [-o feed.xml] [--img-dir DIR --img-base URL]
+(les options --img-* nécessitent Pillow)
 """
 import argparse
 import html
+import io
+import os
 import re
 import sys
 import urllib.request
@@ -70,6 +73,27 @@ def parse(url: str) -> dict:
     }
 
 
+def flatten(it: dict, img_dir: str, img_base: str, width: int = 1600) -> None:
+    """Pose le dessin (PNG/WebP transparent) sur fond blanc et l'enregistre en JPEG,
+    pour qu'il reste lisible dans les lecteurs RSS en mode sombre."""
+    from PIL import Image
+
+    if not it["image"]:
+        return
+    name = re.search(r"(\d+)$", it["url"]).group(1) + ".jpg"
+    path = os.path.join(img_dir, name)
+    if not os.path.exists(path):
+        req = urllib.request.Request(it["image"], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            im = Image.open(io.BytesIO(r.read())).convert("RGBA")
+        bg = Image.new("RGB", im.size, "white")
+        bg.paste(im, mask=im.getchannel("A"))
+        if bg.width > width:
+            bg = bg.resize((width, round(bg.height * width / bg.width)), Image.LANCZOS)
+        bg.save(path, "JPEG", quality=88, optimize=True, progressive=True)
+    it["image"] = it["thumb"] = img_base.rstrip("/") + "/" + name
+
+
 def build(items: list[dict]) -> str:
     out = [
         '<?xml version="1.0" encoding="utf-8"?>',
@@ -104,7 +128,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-n", type=int, default=30, help="nombre de dessins (défaut 30)")
     ap.add_argument("-o", default="feed.xml", help="fichier de sortie (défaut feed.xml, '-' pour stdout)")
+    ap.add_argument("--img-dir", help="dossier où écrire les dessins aplatis sur fond blanc")
+    ap.add_argument("--img-base", help="URL publique correspondant à --img-dir")
     args = ap.parse_args()
+    if bool(args.img_dir) != bool(args.img_base):
+        ap.error("--img-dir et --img-base vont ensemble")
 
     items, url, seen = [], latest_url(), set()
     while url and url not in seen and len(items) < args.n:
@@ -112,6 +140,11 @@ def main():
         it = parse(url)
         items.append(it)
         url = it["prev"]
+
+    if args.img_dir:
+        os.makedirs(args.img_dir, exist_ok=True)
+        for it in items:
+            flatten(it, args.img_dir, args.img_base)
 
     xml = build(items)
     if args.o == "-":

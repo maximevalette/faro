@@ -18,7 +18,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: mkdir -p public && python3 faro_rss.py -n 30 -o public/feed.xml
+      - run: pip install pillow
+      - run: mkdir -p public && python3 faro_rss.py -n 30 -o public/feed.xml --img-dir public/img --img-base https://maximevalette.github.io/faro/img
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
