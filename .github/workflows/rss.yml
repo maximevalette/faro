@@ -20,8 +20,8 @@ jobs:
           python-version: "3.12"
       - run: pip install pillow
       - run: mkdir -p public && python3 faro_rss.py -n 30 -o public/feed.xml --img-dir public/img --img-base https://maximevalette.github.io/faro/img
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: public
   # Job séparé : déployer dans le même job que l'upload échouait parfois
@@ -34,4 +34,4 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
